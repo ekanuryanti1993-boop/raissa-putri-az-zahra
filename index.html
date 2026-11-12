@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Lari Senja – Endless Runner</title>
+<style>
+:root{
+  --ink:#1d1340; --plum:#3b1d6e; --pink:#ff5d8f; --sun:#ffb347; --teal:#2ee6c5; --paper:#fff4e6;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+html,body{margin:0;height:100%;background:radial-gradient(120% 90% at 50% 0%,#4a2a8a 0%,var(--ink) 70%);color:var(--paper);
+  font-family:"Trebuchet MS","Arial Rounded MT Bold",system-ui,sans-serif;overflow:hidden}
+#app{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:10px;
+  padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}
+.top{width:min(100%,900px);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.logo{font-size:clamp(18px,4vw,28px);font-weight:900;letter-spacing:.5px;margin:0}
+.logo span{color:var(--sun)}
+.stats{display:flex;gap:8px}
+.chip{background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18);border-radius:14px;padding:6px 12px;font-weight:800;font-size:clamp(13px,3vw,17px);min-width:78px;text-align:center}
+.chip small{display:block;font-size:10px;font-weight:600;opacity:.7}
+.stage{position:relative;width:min(100%,900px);aspect-ratio:800/360;border-radius:22px;overflow:hidden;
+  border:4px solid #fff4e6;box-shadow:0 0 0 6px var(--plum),0 24px 60px rgba(0,0,0,.55)}
+canvas{width:100%;height:100%;display:block}
+.bar{position:absolute;left:0;right:0;top:0;height:8px;background:rgba(0,0,0,.35)}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--sun));transition:width .1s}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;
+  background:rgba(29,19,64,.72);backdrop-filter:blur(3px);padding:12px}
+.overlay.hide{display:none}
+.overlay h2{margin:0;font-size:clamp(26px,7vw,54px);font-weight:900;line-height:1.05}
+.overlay p{margin:0;max-width:480px;font-size:clamp(12px,2.6vw,16px);opacity:.9;line-height:1.4}
+.overlay.win h2{color:var(--teal)} .overlay.lose h2{color:var(--pink)}
+.controls{width:min(100%,900px);display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{font:inherit;font-weight:900;font-size:clamp(14px,3.4vw,18px);color:var(--ink);background:var(--sun);border:0;border-radius:16px;
+  padding:12px 22px;cursor:pointer;box-shadow:0 5px 0 #b86f12;transition:transform .08s,box-shadow .08s}
+button:active{transform:translateY(4px);box-shadow:0 1px 0 #b86f12}
+button:focus-visible{outline:3px solid var(--teal);outline-offset:3px}
+button.pink{background:var(--pink);box-shadow:0 5px 0 #b02558;color:#fff}
+button.pink:active{box-shadow:0 1px 0 #b02558}
+button.teal{background:var(--teal);box-shadow:0 5px 0 #11957f}
+button.teal:active{box-shadow:0 1px 0 #11957f}
+button.ghost{background:rgba(255,255,255,.14);color:var(--paper);box-shadow:0 5px 0 rgba(0,0,0,.35)}
+.pad{display:none;width:min(100%,900px);gap:12px}
+.pad button{flex:1;padding:20px 10px;font-size:20px}
+@media (pointer:coarse){.pad{display:flex}}
+.modal{position:fixed;inset:0;background:rgba(10,5,30,.8);display:none;align-items:center;justify-content:center;z-index:9;padding:16px}
+.modal.show{display:flex}
+.card{background:var(--paper);color:var(--ink);border-radius:24px;padding:22px;width:min(92vw,380px);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.card h3{margin:0 0 12px;font-size:26px}
+.row{display:flex;justify-content:space-between;padding:10px 4px;border-bottom:2px dashed #d9c8b0;font-weight:800}
+.row:last-of-type{border:0}
+.card button{margin-top:14px}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <h1 class="logo">Lari <span>Senja</span></h1>
+    <div class="stats">
+      <div class="chip"><small>SKOR</small><span id="hudScore">0</span></div>
+      <div class="chip"><small>TERBAIK</small><span id="hudBest">0</span></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="bar"><i id="bar"></i></div>
+    <canvas id="cv" width="800" height="360"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">Lari Senja</h2>
+      <p id="ovText">Kejar <b>1000 poin</b> untuk menang! Lompat rintangan, menunduk di bawah burung, dan kumpulkan koin.</p>
+      <p id="ovHelp" style="opacity:.7">Spasi / ↑ = lompat (bisa 2x) · ↓ = menunduk · Layar HP: ketuk atau pakai tombol</p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="teal" id="btnStart">▶ Start</button>
+    <button class="pink" id="btnRestart">↻ Restart</button>
+    <button id="btnScore">🏆 Score</button>
+    <button class="ghost" id="btnSound">🔊</button>
+  </div>
+
+  <div class="pad">
+    <button class="ghost" id="padDuck">⬇ Tunduk</button>
+    <button class="teal" id="padJump">⬆ Lompat</button>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="card">
+    <h3>🏆 Papan Skor</h3>
+    <div class="row"><span>Skor terbaik</span><span id="mBest">0</span></div>
+    <div class="row"><span>Skor terakhir</span><span id="mLast">0</span></div>
+    <div class="row"><span>Total koin</span><span id="mCoins">0</span></div>
+    <div class="row"><span>Menang / Main</span><span id="mWins">0 / 0</span></div>
+    <button class="teal" id="btnClose">Tutup</button>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const W = 800, H = 360, GROUND = 300, TARGET = 1000;
+const $ = id => document.getElementById(id);
+
+/* ---------- Penyimpanan aman (offline) ---------- */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("ls_"+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ localStorage.setItem("ls_"+k, JSON.stringify(v)); }catch(e){} }
+};
+const stats = { best: store.get("best",0), last: store.get("last",0), coins: store.get("coins",0), wins: store.get("wins",0), plays: store.get("plays",0) };
+let soundOn = store.get("sound", true);
+$("btnSound").textContent = soundOn ? "🔊" : "🔇";
+$("hudBest").textContent = stats.best;
+
+/* ---------- Suara ---------- */
+let ac = null;
+function beep(f, d = .1, type = "square", vol = .05, slide = 0){
+  if(!soundOn) return;
+  try{
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if(ac.state === "suspended") ac.resume();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, ac.currentTime);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, f+slide), ac.currentTime + d);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + d);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+  }catch(e){}
+}
+
+/* ---------- State ---------- */
+let state = "idle"; // idle | play | win | lose
+let player, obstacles, coins, particles, dist, coinCount, speed, spawnIn, coinIn, jumps, last = 0, t = 0, shake = 0, score = 0;
+let duckHeld = false;
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function reset(){
+  player = { x: 90, y: GROUND, vy: 0, w: 38, h: 54, duck: false, run: 0 };
+  obstacles = []; coins = []; particles = [];
+  dist = 0; coinCount = 0; speed = 330; spawnIn = 500; coinIn = 350; jumps = 0; shake = 0; score = 0;
+  updateHud();
+}
+reset();
+
+function startGame(){
+  reset(); state = "play";
+  $("overlay").classList.add("hide");
+  stats.plays++; store.set("plays", stats.plays);
+  beep(520, .12, "triangle", .06, 300);
+}
+
+function endGame(won){
+  state = won ? "win" : "lose";
+  stats.last = score; stats.coins += coinCount;
+  if(won) stats.wins++;
+  if(score > stats.best){ stats.best = score; }
+  store.set("best", stats.best); store.set("last", stats.last); store.set("coins", stats.coins); store.set("wins", stats.wins);
+  $("hudBest").textContent = stats.best;
+  const ov = $("overlay"); ov.className = "overlay " + (won ? "win" : "lose");
+  $("ovTitle").textContent = won ? "🎉 Kamu Menang!" : "💥 Game Over";
+  $("ovText").innerHTML = won
+    ? `Kamu mencapai <b>${score}</b> poin dan menaklukkan senja!`
+    : `Skor kamu <b>${score}</b>${score >= stats.best && score>0 ? " – rekor baru!" : ""}. Butuh ${Math.max(0,TARGET-score)} poin lagi untuk menang.`;
+  $("ovHelp").textContent = "Tekan Restart atau Enter untuk main lagi.";
+  if(won){ beep(660,.15,"triangle",.07); setTimeout(()=>beep(880,.2,"triangle",.07),150); setTimeout(()=>beep(1100,.3,"triangle",.07),320); for(let i=0;i<60;i++) burst(rand(100,700), rand(40,200), 1, ["#2ee6c5","#ffb347","#ff5d8f","#fff4e6"]); }
+  else { beep(220,.4,"sawtooth",.07,-160); shake = 14; }
+}
+
+/* ---------- Input ---------- */
+function jump(){
+  if(state !== "play") return;
+  if(jumps < 2){
+    player.vy = jumps === 0 ? -860 : -780; jumps++; player.duck = false;
+    beep(jumps === 1 ? 420 : 560, .12, "square", .04, 260);
+    burst(player.x + 10, GROUND, 6, ["#fff4e6"]);
+  }
+}
+function setDuck(v){ duckHeld = v; }
+
+window.addEventListener("keydown", e => {
+  if(["Space","ArrowUp","ArrowDown"].includes(e.code)) e.preventDefault();
+  if(e.repeat) return;
+  if(e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW"){
+    if(state === "idle") startGame(); else jump();
+  }
+  if(e.code === "ArrowDown" || e.code === "KeyS") setDuck(true);
+  if(e.code === "Enter"){ startGame(); }
+}, { passive:false });
+window.addEventListener("keyup", e => { if(e.code === "ArrowDown" || e.code === "KeyS") setDuck(false); });
+
+// Ketuk layar = lompat; geser ke bawah = tunduk
+let ty = null;
+cv.addEventListener("pointerdown", e => { ty = e.clientY; if(state === "idle") startGame(); else jump(); });
+cv.addEventListener("pointermove", e => { if(ty !== null && e.clientY - ty > 30){ setDuck(true); } });
+["pointerup","pointercancel","pointerleave"].forEach(ev => cv.addEventListener(ev, () => { ty = null; setDuck(false); }));
+
+const hold = (el, down, up) => { el.addEventListener("pointerdown", e => { e.preventDefault(); down(); }); ["pointerup","pointercancel","pointerleave"].forEach(ev => el.addEventListener(ev, up)); };
+hold($("padJump"), () => { if(state==="idle") startGame(); else jump(); }, () => {});
+hold($("padDuck"), () => setDuck(true), () => setDuck(false));
+
+$("btnStart").addEventListener("click", e => { if(state !== "play") startGame(); e.currentTarget.blur(); });
+$("btnRestart").addEventListener("click", e => { startGame(); e.currentTarget.blur(); });
+$("btnScore").addEventListener("click", e => { openModal(); e.currentTarget.blur(); });
+$("btnClose").addEventListener("click", () => $("modal").classList.remove("show"));
+$("modal").addEventListener("click", e => { if(e.target === $("modal")) $("modal").classList.remove("show"); });
+$("btnSound").addEventListener("click", e => { soundOn = !soundOn; store.set("sound", soundOn); e.currentTarget.textContent = soundOn ? "🔊" : "🔇"; e.currentTarget.blur(); });
+document.addEventListener("visibilitychange", () => { last = 0; });
+
+function openModal(){
+  $("mBest").textContent = stats.best; $("mLast").textContent = stats.last; $("mCoins").textContent = stats.coins;
+  $("mWins").textContent = stats.wins + " / " + stats.plays;
+  $("modal").classList.add("show");
+}
+
+/* ---------- Partikel ---------- */
+function burst(x, y, n, cols){
+  for(let i=0;i<n;i++) particles.push({ x, y, vx: rand(-160,160), vy: rand(-260,-40), life: rand(.35,.9), max: .9, c: cols[(Math.random()*cols.length)|0], s: rand(2,5) });
+}
+
+/* ---------- Update ---------- */
+function hitbox(o){ return { x:o.x+5, y:o.y+5, w:o.w-10, h:o.h-10 }; }
+function overlap(a,b){ return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
+
+function update(dt){
+  t += dt;
+  if(state !== "play"){ updateParticles(dt); return; }
+  speed = Math.min(330 + dist * 0.045, 720);
+  dist += speed * dt;
+  const p = player;
+  p.duck = duckHeld && p.y >= GROUND;
+  p.h = p.duck ? 28 : 54; p.w = p.duck ? 52 : 38;
+  if(duckHeld && p.y < GROUND) p.vy += 3200 * dt; // tunduk di udara = jatuh cepat
+  p.vy += 2400 * dt; p.y += p.vy * dt;
+  if(p.y >= GROUND){ if(p.y > GROUND && p.vy > 300) burst(p.x+10, GROUND, 5, ["#fff4e6"]); p.y = GROUND; p.vy = 0; jumps = 0; }
+  p.run += dt * speed * 0.03;
+
+  // Spawn rintangan
+  spawnIn -= speed * dt;
+  if(spawnIn <= 0){
+    const r = Math.random();
+    if(r < .62 || dist < 800){
+      const h = rand(36, 64), w = rand(28, 44);
+      obstacles.push({ type:"rock", x: W + 20, y: GROUND - h, w, h });
+      if(dist > 3000 && Math.random() < .3) obstacles.push({ type:"rock", x: W + 20 + w + 8, y: GROUND - h*.7, w: w*.9, h: h*.7 });
+    } else {
+      obstacles.push({ type:"bird", x: W + 20, y: GROUND - 78, w: 46, h: 30, f: 0 });
+    }
+    spawnIn = rand(360, 620) + speed * 0.28;
+  }
+  // Spawn koin
+  coinIn -= speed * dt;
+  if(coinIn <= 0){
+    const lastO = obstacles[obstacles.length-1];
+    if(lastO && lastO.x > W - 200){ coinIn = 120; }
+    else {
+      const y = Math.random() < .5 ? GROUND - 24 : GROUND - 120;
+      for(let i=0;i<3;i++) coins.push({ x: W + 30 + i*34, y: y - (i===1 ? 12 : 0), r: 11, ph: i });
+      coinIn = rand(500, 900);
+    }
+  }
+
+  const pb = { x: p.x + 5, y: p.y - p.h + 4, w: p.w - 10, h: p.h - 8 };
+  for(const o of obstacles){
+    o.x -= speed * dt; if(o.type==="bird") { o.f += dt*12; o.x -= 60*dt; }
+    if(overlap(pb, hitbox(o))){ burst(p.x+20, p.y-25, 24, ["#ff5d8f","#ffb347","#fff4e6"]); endGame(false); return; }
+  }
+  for(let i = coins.length-1; i >= 0; i--){
+    const c = coins[i]; c.x -= speed * dt;
+    if(Math.abs(c.x - (p.x + p.w/2)) < c.r + p.w/2 && Math.abs(c.y - (p.y - p.h/2)) < c.r + p.h/2){
+      coins.splice(i,1); coinCount++; burst(c.x, c.y, 8, ["#ffb347","#fff4e6"]); beep(900, .08, "triangle", .05, 500);
+    } else if(c.x < -30) coins.splice(i,1);
+  }
+  obstacles = obstacles.filter(o => o.x + o.w > -20);
+  updateParticles(dt);
+  score = Math.floor(dist / 12) + coinCount * 10;
+  updateHud();
+  if(score >= TARGET){ score = TARGET; updateHud(); endGame(true); }
+}
+function updateParticles(dt){
+  for(const q of particles){ q.life -= dt; q.vy += 700*dt; q.x += q.vx*dt; q.y += q.vy*dt; }
+  particles = particles.filter(q => q.life > 0);
+  if(shake > 0) shake = Math.max(0, shake - 40*dt);
+}
+function updateHud(){
+  $("hudScore").textContent = score;
+  $("bar").style.width = Math.min(100, score / TARGET * 100) + "%";
+}
+
+/* ---------- Gambar ---------- */
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x,y,w,h,r) : ctx.rect(x,y,w,h); }
+
+function draw(){
+  ctx.save();
+  if(shake > 0) ctx.translate(rand(-shake,shake), rand(-shake,shake));
+  const prog = Math.min(1, score / TARGET);
+  // Langit berubah makin senja
+  const g = ctx.createLinearGradient(0,0,0,GROUND);
+  g.addColorStop(0, mix([74,42,138],[40,30,110],prog));
+  g.addColorStop(.6, mix([255,93,143],[255,120,120],prog));
+  g.addColorStop(1, mix([255,179,71],[255,210,120],prog));
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  // Matahari
+  const sy = 150 + prog * 40;
+  ctx.fillStyle = "rgba(255,244,230,.95)"; ctx.beginPath(); ctx.arc(590, sy, 52, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(255,244,230,.25)"; ctx.beginPath(); ctx.arc(590, sy, 74, 0, 7); ctx.fill();
+  // Awan
+  ctx.fillStyle = "rgba(255,244,230,.35)";
+  for(let i=0;i<4;i++){ const cx = ((i*260 - t*18*(1+i*.2)) % 1040 + 1040) % 1040 - 120, cy = 50 + (i%2)*40;
+    rr(cx, cy, 90, 20, 10); ctx.fill(); rr(cx+20, cy-12, 50, 20, 10); ctx.fill(); }
+  // Gunung (parallax)
+  const off = state === "play" ? dist : t * 40;
+  mountains(off*.12, "#6a2f8f", 150, 90, .006);
+  mountains(off*.3, "#3b1d6e", 200, 70, .009);
+  // Tanah
+  ctx.fillStyle = "#1d1340"; ctx.fillRect(0, GROUND, W, H-GROUND);
+  ctx.fillStyle = "#2ee6c5"; ctx.fillRect(0, GROUND, W, 6);
+  ctx.fillStyle = "#3b1d6e";
+  for(let i=-1;i<22;i++){ const x = i*50 - (off % 50); ctx.fillRect(x, GROUND+22, 24, 5); ctx.fillRect(x+25, GROUND+40, 14, 4); }
+
+  for(const c of coins) drawCoin(c);
+  for(const o of obstacles) o.type === "rock" ? drawRock(o) : drawBird(o);
+  drawPlayer();
+  for(const q of particles){ ctx.globalAlpha = Math.max(0, q.life / q.max); ctx.fillStyle = q.c; ctx.fillRect(q.x, q.y, q.s, q.s); }
+  ctx.globalAlpha = 1;
+  // Koin HUD
+  ctx.fillStyle = "rgba(29,19,64,.6)"; rr(W-110, 18, 94, 30, 15); ctx.fill();
+  ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.arc(W-92, 33, 9, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff4e6"; ctx.font = "bold 18px Trebuchet MS, sans-serif"; ctx.textAlign = "left"; ctx.fillText("× " + coinCount, W-76, 40);
+  ctx.restore();
+}
+function mix(a,b,t){ return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(",")})`; }
+function mountains(off, col, base, amp, f){
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, GROUND);
+  for(let x=0;x<=W;x+=10){ const y = GROUND - base*.4 - (Math.sin((x+off)*f*2)+Math.sin((x+off)*f*5.3)*.5+1.5)*amp*.35; ctx.lineTo(x,y); }
+  ctx.lineTo(W, GROUND); ctx.closePath(); ctx.fill();
+}
+function drawPlayer(){
+  const p = player, x = p.x, y = p.y, air = p.y < GROUND, bob = air ? 0 : Math.abs(Math.sin(p.run)) * 3;
+  ctx.save();
+  // Bayangan
+  ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(x+p.w/2, GROUND+4, p.w/2 * (1 - (GROUND-y)/400), 5, 0, 0, 7); ctx.fill();
+  const top = y - p.h - bob;
+  // Syal
+  ctx.fillStyle = "#ff5d8f"; const wv = Math.sin(t*20)*4;
+  ctx.beginPath(); ctx.moveTo(x+4, top+16); ctx.lineTo(x-20, top+12+wv); ctx.lineTo(x-16, top+22+wv); ctx.lineTo(x+4, top+24); ctx.fill();
+  // Kaki
+  ctx.fillStyle = "#1d1340";
+  if(!p.duck){ const s = air ? 6 : Math.sin(p.run*1.2) * 9;
+    rr(x+8+s, y-14-bob, 9, 14, 4); ctx.fill(); rr(x+22-s, y-14-bob, 9, 14, 4); ctx.fill(); }
+  // Badan
+  ctx.fillStyle = "#ffb347"; rr(x, top, p.w, p.h - (p.duck ? 0 : 12), 12); ctx.fill();
+  ctx.fillStyle = "#fff4e6"; rr(x + p.w*.45, top + (p.duck?6:14), p.w*.5, p.duck?12:16, 8); ctx.fill();
+  // Telinga rubah
+  ctx.fillStyle = "#e8891a"; ctx.beginPath(); ctx.moveTo(x+4, top+4); ctx.lineTo(x+8, top-9); ctx.lineTo(x+16, top+2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x+18, top+2); ctx.lineTo(x+26, top-9); ctx.lineTo(x+30, top+4); ctx.fill();
+  // Mata
+  ctx.fillStyle = "#1d1340"; ctx.beginPath(); ctx.arc(x+p.w*.72, top + (p.duck?10:20), 3.2, 0, 7); ctx.fill();
+  ctx.restore();
+}
+function drawRock(o){
+  ctx.fillStyle = "#5b3a8c"; ctx.beginPath(); ctx.moveTo(o.x, o.y+o.h); ctx.lineTo(o.x+o.w*.15, o.y+o.h*.3); ctx.lineTo(o.x+o.w*.5, o.y);
+  ctx.lineTo(o.x+o.w*.9, o.y+o.h*.35); ctx.lineTo(o.x+o.w, o.y+o.h); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#7d58b8"; ctx.beginPath(); ctx.moveTo(o.x+o.w*.5, o.y); ctx.lineTo(o.x+o.w*.9, o.y+o.h*.35); ctx.lineTo(o.x+o.w*.55, o.y+o.h*.5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#2ee6c5"; ctx.fillRect(o.x, o.y+o.h-5, o.w, 5);
+}
+function drawBird(o){
+  const fl = Math.sin(o.f) * 14;
+  ctx.fillStyle = "#1d1340"; ctx.beginPath(); ctx.ellipse(o.x+24, o.y+16, 20, 9, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(o.x+16, o.y+14); ctx.lineTo(o.x+28, o.y+14-fl-10); ctx.lineTo(o.x+34, o.y+14); ctx.fill();
+  ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.moveTo(o.x+2, o.y+14); ctx.lineTo(o.x-9, o.y+18); ctx.lineTo(o.x+2, o.y+21); ctx.fill();
+  ctx.fillStyle = "#ff5d8f"; ctx.beginPath(); ctx.arc(o.x+10, o.y+13, 2.6, 0, 7); ctx.fill();
+}
+function drawCoin(c){
+  const w = Math.abs(Math.cos(t*4 + c.ph)) * c.r + 2;
+  ctx.fillStyle = "#ffb347"; ctx.beginPath(); ctx.ellipse(c.x, c.y, w, c.r, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff4e6"; ctx.beginPath(); ctx.ellipse(c.x, c.y, w*.45, c.r*.6, 0, 0, 7); ctx.fill();
+}
+
+/* ---------- Loop ---------- */
+function frame(ts){
+  if(!last) last = ts;
+  const dt = Math.min(.033, (ts - last) / 1000); last = ts;
+  update(dt); draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
